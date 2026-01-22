@@ -10,7 +10,7 @@ jobs:
       JARS_DIR: "./jars"
       JBRS_DIR: "./jbrs"
       SOURCE_FLAVOR: "linux-x64"
-      TARGET_FLAVORS: ("linux-x64" "windows-aarch64")
+      TARGET_FLAVORS: "linux-x64 windows-aarch64"
     steps:
       - name: Detect latest JBR version
         id: detect-jbr
@@ -33,7 +33,8 @@ jobs:
         run: |
           version="${{ steps.detect-jbr.outputs.version }}"
           build="${{ steps.detect-jbr.outputs.build }}"
-          for flavor in "${TARGET_FLAVORS[@]}"; do
+          read -r -a targetFlavors <<< "${TARGET_FLAVORS}"
+          for flavor in "${targetFlavors[@]}"; do
             curFlavorDir="${JBRS_DIR}/${flavor}"
             mkdir "$curFlavorDir"
             jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
