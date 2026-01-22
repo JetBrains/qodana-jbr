@@ -31,8 +31,8 @@ jobs:
           ls -lh $JARS_DIR | tr -s ' ' | cut -d' ' -f9,5
       - name: Download latest JBRs
         run: |
-          version = "${{ steps.detect-jbr.outputs.version }}"
-          build = "${{ steps.detect-jbr.outputs.build }}"
+          version="${{ steps.detect-jbr.outputs.version }}"
+          build="${{ steps.detect-jbr.outputs.build }}"
           for flavor in "${TARGET_FLAVORS[@]}"; do
             curFlavorDir="${JBRS_DIR}/${flavor}"
             mkdir "$curFlavorDir"
