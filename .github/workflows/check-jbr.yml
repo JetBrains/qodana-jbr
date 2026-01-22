@@ -81,6 +81,7 @@ jobs:
             if [[ -d $directory ]]; then
               targetModulePath=$(find "$directory" -name "jmods" -type d)
               qdJbrName=qodana-$(basename "$directory")
+              "$sourceFlavorJlink" --list-plugins
               echo Generating "$qdJbrName"
               "$sourceFlavorJlink" \
               --module-path "$targetModulePath" \
