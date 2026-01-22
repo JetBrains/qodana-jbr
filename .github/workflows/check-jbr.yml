@@ -23,12 +23,14 @@ jobs:
     
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "build=$build" >> $GITHUB_OUTPUT
-          echo "::notice::Detected latest available JBR version $version, build $build"
+          echo "Detected latest available JBR version $version, build $build"
+
       - name: Fetch qodana-cli dependencies
         run: |
-          curl -L -O https://raw.githubusercontent.com/JetBrains/qodana-cli/main/internal/tooling/pom.xml 
+          curl -L -# -O https://raw.githubusercontent.com/JetBrains/qodana-cli/main/internal/tooling/pom.xml 
           mvn -q dependency:copy-dependencies -DoutputDirectory="$JARS_DIR"
           ls -lh $JARS_DIR | tr -s ' ' | cut -d' ' -f9,5
+
       - name: Download latest JBRs
         run: |
           version="${{ steps.detect-jbr.outputs.version }}"
@@ -39,8 +41,59 @@ jobs:
             mkdir -p "$curFlavorDir"
             jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
             echo Downloading "$jbrArchiveName"
-            curl -L -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+            curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
             echo Unpacking "$flavor" JBR
             tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
           done
-          find . -maxdepth 4 -print | sed -e 's|[^/]*/|  |g'
+
+      - name: Generate jmods list
+        id: jmods-list
+        run: |
+          sourceFlavorJdeps=$(find "${JBRS_DIR}"/"${SOURCE_FLAVOR}" -name "jdeps" -type f | head -n 1)
+          
+          merged=''
+          for file in "${JARS_DIR}"/*; do
+            if [[ -f "$file" ]]; then
+              curJdeps=$("$sourceFlavorJdeps" --list-deps --ignore-missing-deps "$file")
+
+              if [[ "$curJdeps" == Error:* ]]; then
+                echo Error detected in jdeps output for "$file":
+                echo "$curJdeps"
+                exit 1
+              fi
+              echo -e "\nDetected jmods for $(basename "$file"):"
+              echo "$curJdeps"
+              merged="$merged $curJdeps"
+            fi
+          done
+
+          uniqueJdeps=$(echo "$merged" | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/^,//;s/,$//')
+          echo "uniqueJdeps=$uniqueJdeps" >> $GITHUB_OUTPUT
+          echo -e "\nCommon list of jmods to include in qodana-jbr:\n${uniqueJdeps} \n"
+
+      - name: Generate qodana-jbrs
+        run: |
+          uniqueJdeps="${{ steps.jmods-list.outputs.uniqueJdeps }}"
+          qodanaJbrsDir="${JBRS_DIR}/qodana-jbrs"
+          mkdir -p "$qodanaJbrsDir"
+          sourceFlavorJlink=$(find "${JBRS_DIR}"/"${SOURCE_FLAVOR}" -name "jlink")
+          for directory in "${JBRS_DIR}"/*/*; do
+            if [[ -d $directory ]]; then
+              targetModulePath=$(find "$directory" -name "jmods" -type d)
+              qdJbrName=qodana-$(basename "$directory")
+              echo Generating "$qdJbrName"
+              "$sourceFlavorJlink" \
+              --module-path "$targetModulePath" \
+              --compress=zip-6 \
+              --add-modules "$uniqueJdeps" \
+              --no-header-files \
+              --no-man-pages \
+              --strip-debug \
+              --output "${qodanaJbrsDir}/${qdJbrName}"
+
+              archive_name="${qodanaJbrsDir}/${qdJbrName}.tar.gz"
+              tar -czf "$archive_name" -C "$qodanaJbrsDir" "$qdJbrName"
+              echo -e "Created qodana-jbr archive: ${archive_name}\n"
+            fi
+          done
+          find $JBRS_DIR -print | sed -e 's|[^/]*/|  |g' -e 's|^  |.|'
