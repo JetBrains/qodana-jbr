@@ -36,7 +36,7 @@ jobs:
           read -r -a targetFlavors <<< "${TARGET_FLAVORS}"
           for flavor in "${targetFlavors[@]}"; do
             curFlavorDir="${JBRS_DIR}/${flavor}"
-            mkdir "$curFlavorDir"
+            mkdir -p "$curFlavorDir"
             jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
             echo Downloading "$jbrArchiveName"
             curl -L -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
