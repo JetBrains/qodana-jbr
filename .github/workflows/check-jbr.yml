@@ -1,0 +1,30 @@
+name: Check JBR Version
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect latest JBR version
+        id: detect-jbr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view --json tagName --jq .tagName)
+          version=$(echo "$tagName" | sed -n 's/jbr-release-\(.*\)b.*/\1/p')
+          build=$(echo "$tagName" | sed -n 's/.*\(b.*\)/\1/p')
+    
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "build=$build" >> $GITHUB_OUTPUT
+
+      - name: Display detected values (expression context)
+        run: |
+          echo "version = ${{ steps.detect-jbr.outputs.version }}"
+          echo "build   = ${{ steps.detect-jbr.outputs.build }}"
+
+      - name: Display detected values (notice annotations)
+        run: |
+          echo "::notice::Version from outputs: ${{ steps.detect-jbr.outputs.version }}"
+          echo "::notice::Build from outputs: ${{ steps.detect-jbr.outputs.build }}"
