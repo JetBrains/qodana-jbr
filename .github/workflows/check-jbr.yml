@@ -95,7 +95,7 @@ jobs:
         run: |
           version="${{ needs.prepare.outputs.JBR_VERSION }}"
           build="${{ needs.prepare.outputs.JBR_BUILD }}"
-          read -r -a targetFlavors <<< ${{ matrix.flavors }}
+          read -r -a targetFlavors <<< "${{ matrix.flavors }}"
           echo "sourceFlavor=${targetFlavors[0]}" >> GITHUB_OUTPUT
           for flavor in "${targetFlavors[@]}"; do
             curFlavorDir="${JBRS_DIR}/${flavor}"
