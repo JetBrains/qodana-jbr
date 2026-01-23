@@ -108,7 +108,7 @@ jobs:
           echo Downloading "$jbrName"
           curl -L -# -O --output-dir "$JBRS_DIR" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
           echo Unpacking "$flavor" JBR
-          tar -xzf "$"${JBRS_DIR}"/*.tar.gz -C "$JBRS_DIR"
+          tar -xzf "${JBRS_DIR}"/*.tar.gz -C "$JBRS_DIR"
           ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
 
       - name: qodana-jbr ${{ matrix.flavor }}
