@@ -88,6 +88,7 @@ jobs:
             flavors: "windows-x64 windows-aarch64"
     env:
       JBRS_DIR: "./jbrs"
+      QODANA_JBRS_DIR: "./qodana-jbrs"
     steps:
       - name: Download latest JBRs
         id: download-jbrs
@@ -110,8 +111,7 @@ jobs:
         shell: bash
         run: |
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST  }}"
-          qodanaJbrsDir="${JBRS_DIR}/qodana-jbrs"
-          mkdir -p "$qodanaJbrsDir"
+          mkdir -p "$QODANA_JBRS_DIR"
           sourceFlavor="${{ steps.download-jbrs.outputs.sourceFlavor }}"
           echo "Using $sourceFlavor JBR to generate qodana-jbrs for ${{ matrix.flavors }}"
           sourceFlavorJlink=$(find "${JBRS_DIR}"/"${sourceFlavor}" -name "jlink")
@@ -128,11 +128,12 @@ jobs:
               --no-header-files \
               --no-man-pages \
               --strip-debug \
-              --output "${qodanaJbrsDir}/${qdJbrName}"
+              --output "${QODANA_JBRS_DIR}/${qdJbrName}"
 
-              archive_name="${qodanaJbrsDir}/${qdJbrName}.tar.gz"
-              tar -czf "$archive_name" -C "$qodanaJbrsDir" "$qdJbrName"
+              archive_name="${QODANA_JBRS_DIR}/${qdJbrName}.tar.gz"
+              tar -czf "$archive_name" -C "$QODANA_JBRS_DIR" "$qdJbrName"
               echo -e "Created qodana-jbr archive: ${archive_name}\n"
             fi
           done
-          find $JBRS_DIR -print | sed -e 's|[^/]*/|  |g' -e 's|^  |.|'
+          echo Artifacts marked for publish:
+          ls -lh "$QODANA_JBRS_DIR"
