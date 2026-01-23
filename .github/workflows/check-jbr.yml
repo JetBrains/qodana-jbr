@@ -148,13 +148,13 @@ jobs:
 
           echo -e "\nArtifact marked for publish:"
           ls -lh "$distDirectory" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
-          echo "archiveName=${qdJbrName}.tar.gz" >> $GITHUB_OUTPUT
+          echo "qdJbrName=${qdJbrName}" >> $GITHUB_OUTPUT
           echo "archivePath=$archivePath" >> $GITHUB_OUTPUT
 
       - name: Upload ${{ matrix.flavor }} qodana-jbr
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.generate-qodana-jbr.outputs.archiveName }}
+          name: ${{ steps.generate-qodana-jbr.outputs.qdJbrName }}
           path: ${{ steps.generate-qodana-jbr.outputs.archivePath }}
           if-no-files-found: error
 
@@ -172,42 +172,35 @@ jobs:
         with:
           path: ${{ env.DIST_DIRECTORY }}
 
-      - name: Inspect collected files
+      - name: List all artifacts
         shell: bash
         run: |
-          find $DIST_DIRECTORY -type f -maxdepth 3 -print
-          find $DIST_DIRECTORY -type f -name "*.tar.gz" -maxdepth 3 | wc -l
+          find $DIST_DIRECTORY -type f -maxdepth 3
 
-      - name: List assets marked for release
+      - name: Create test pre-release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Collected artifacts:"
-          ls -lh "$DIST_DIRECTORY" | tr -s ' ' | cut -d' ' -f9,5
+          tag="test-${{ github.run_id }}"
+          title="Test release ${tag}"
+          notes="Temporary test release from run ${{ github.run_id }}."
+          gh release create "$tag" --title "$title" --notes "$notes" --prerelease
 
-#      - name: Create test pre-release
-#        shell: bash
-#        env:
-#          GH_TOKEN: ${{ github.token }}
-#        run: |
-#          tag="test-${{ github.run_id }}"
-#          title="Test release ${tag}"
-#          notes="Temporary test release from run ${{ github.run_id }}."
-#          gh release create "$tag" --title "$title" --notes "$notes" --prerelease
-#
-#      - name: Upload all assets
-#        shell: bash
-#        env:
-#          GH_TOKEN: ${{ github.token }}
-#        run: |
-#          tag="test-${{ github.run_id }}"
-#          assets=($DIST_DIRECTORY/*.tar.gz)
-#
-#          if (( ${#assets[@]} == 0 )); then
-#            echo "No .tar.gz assets found to upload."
-#            exit 1
-#          fi
-#
-#          gh release upload "$tag" "${assets[@]}" --clobber
+      - name: Upload all assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="test-${{ github.run_id }}"
+          assets=($DIST_DIRECTORY/*.tar.gz)
+
+          if (( ${#assets[@]} == 0 )); then
+            echo "No .tar.gz assets found to upload."
+            exit 1
+          fi
+
+          gh release upload "$tag" "${assets[@]}" --clobber
 
       # Optional: uncomment to auto-cleanup the test release at the end
       # - name: Cleanup test release
