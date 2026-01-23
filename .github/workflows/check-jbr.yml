@@ -29,6 +29,7 @@ jobs:
           echo "build=$build" >> $GITHUB_OUTPUT
 
       - name: Download latest ${{ env.SOURCE_FLAVOR }} JBR
+        id: download-jbr
         run: |
           version="${{ steps.detect-jbr.outputs.version }}"
           build="${{ steps.detect-jbr.outputs.build }}"
@@ -42,6 +43,7 @@ jobs:
           tar -xzf "$jbrArchivePath"
           echo -e "\nDownloaded $SOURCE_FLAVOR JBR:"
           ls -lh | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
 
       - name: Fetch qodana-cli dependencies
         run: |
@@ -52,12 +54,12 @@ jobs:
       - name: Generate jmods list
         id: jmods-list
         run: |
-          sourceFlavorJdeps=$(find "${SOURCE_FLAVOR}" -name "jdeps" -type f | head -n 1)
+          jdeps=$(find "${{ steps.download-jbr.outputs.jbrName }}" -name "jdeps" -type f | head -n 1)
 
           merged=''
           for file in "${JARS_DIR}"/*; do
             if [[ -f "$file" ]]; then
-              curJdeps=$("$sourceFlavorJdeps" --list-deps --ignore-missing-deps "$file")
+              curJdeps=$("$jdeps" --list-deps --ignore-missing-deps "$file")
 
               if [[ "$curJdeps" == Error:* ]]; then
                 echo Error detected in jdeps output for "$file":
