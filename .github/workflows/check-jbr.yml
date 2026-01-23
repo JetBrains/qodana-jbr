@@ -185,7 +185,11 @@ jobs:
           tag="test-${{ github.run_id }}"
           title="Test release ${tag}"
           notes="Temporary test release from run ${{ github.run_id }}."
-          gh release create "$tag" --title "$title" --notes "$notes" --prerelease
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --notes "$notes" \
+            --prerelease
 
       - name: Upload all assets
         shell: bash
@@ -200,7 +204,9 @@ jobs:
             exit 1
           fi
 
-          gh release upload "$tag" "${assets[@]}" --clobber
+          gh release upload "$tag" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
 
       # Optional: uncomment to auto-cleanup the test release at the end
       # - name: Cleanup test release
