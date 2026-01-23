@@ -33,7 +33,7 @@ jobs:
         run: |
           version="${{ steps.detect-jbr.outputs.version }}"
           build="${{ steps.detect-jbr.outputs.build }}"
-          curFlavorDir="${JBRS_DIR}/${SOURCE_FLAVOR}"
+          curFlavorDir="${SOURCE_FLAVOR}"
           mkdir -p "$curFlavorDir"
           jbrArchiveName="jbrsdk-${version}-${SOURCE_FLAVOR}-${build}.tar.gz"
           echo Downloading "$jbrArchiveName"
@@ -50,7 +50,7 @@ jobs:
       - name: Generate jmods list
         id: jmods-list
         run: |
-          sourceFlavorJdeps=$(find "${JBRS_DIR}"/"${SOURCE_FLAVOR}" -name "jdeps" -type f | head -n 1)
+          sourceFlavorJdeps=$(find "${SOURCE_FLAVOR}" -name "jdeps" -type f | head -n 1)
 
           merged=''
           for file in "${JARS_DIR}"/*; do
@@ -100,20 +100,19 @@ jobs:
         id: download-jbr
         shell: bash
         run: |
-          mkdir -p "$JBRS_DIR"
           version="${{ needs.prepare.outputs.JBR_VERSION }}"
           build="${{ needs.prepare.outputs.JBR_BUILD }}"
           flavor="${{ matrix.flavor }}"
           jbrName="jbrsdk-$version-$flavor-$build"
 
           echo Downloading "$jbrName"
-          jbrArchivePath="$JBRS_DIR/${jbrName}.tar.gz"
+          jbrArchivePath="${jbrName}.tar.gz"
           curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
       
           echo "Unpacking $flavor JBR"
-          tar -xzf "$jbrArchivePath" -C "$JBRS_DIR"
+          tar -xzf "$jbrArchivePath"
           echo -e "\nDownloaded $flavor JBR:"
-          ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          ls -lh | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
           
           echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
 
@@ -126,8 +125,8 @@ jobs:
           flavor="${{ matrix.flavor }}"
           
           jlinkName=$([[ "$flavor" == windows* ]] && echo "jlink.exe" || echo "jlink")
-          jlink=$(find "${JBRS_DIR}"/"${jbrName}" -name "${jlinkName}")
-          targetModulePath=$(find "${JBRS_DIR}"/"${jbrName}" -name "jmods" -type d)
+          jlink=$(find "${jbrName}" -name "${jlinkName}")
+          targetModulePath=$(find "${jbrName}" -name "jmods" -type d)
           qdJbrName=qodana-$jbrName
           
           echo -e "\nRunning $jlink"
