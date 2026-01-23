@@ -83,7 +83,7 @@ jobs:
           - runner: ubuntu-latest
             flavors: "linux-x64 linux-aarch64"
           - runner: macos-latest
-            flavors: "macos-aarch64 macos-x64"
+            flavors: "osx-aarch64 osx-x64"
           - runner: windows-latest
             flavors: "windows-x64 windows-aarch64"
     env:
@@ -103,7 +103,6 @@ jobs:
             jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
             echo Downloading "$jbrArchiveName"
             curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
-            ls -lh "$curFlavorDir"
             echo Unpacking "$flavor" JBR
             tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
           done
