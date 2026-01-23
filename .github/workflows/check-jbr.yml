@@ -112,7 +112,9 @@ jobs:
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST  }}"
           qodanaJbrsDir="${JBRS_DIR}/qodana-jbrs"
           mkdir -p "$qodanaJbrsDir"
-          sourceFlavorJlink=$(find "${JBRS_DIR}"/"${{ steps.download-jbrs.outputs.sourceFlavor }}" -name "jlink")
+          sourceFlavor="${{ steps.download-jbrs.outputs.sourceFlavor }}"
+          echo "Using $sourceFlavor JBR to generate qodana-jbrs for ${{ matrix.flavors }}"
+          sourceFlavorJlink=$(find "${JBRS_DIR}"/"${sourceFlavor}" -name "jlink")
           for directory in "${JBRS_DIR}"/*/*; do
             if [[ -d $directory ]]; then
               targetModulePath=$(find "$directory" -name "jmods" -type d)
