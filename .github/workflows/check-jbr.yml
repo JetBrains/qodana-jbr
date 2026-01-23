@@ -31,9 +31,11 @@ jobs:
 
       - name: Download latest ${{ env.SOURCE_FLAVOR }} JBR
         run: |
+          version="${{ steps.detect-jbr.outputs.version }}"
+          build="${{ steps.detect-jbr.outputs.build }}"
           curFlavorDir="${JBRS_DIR}/${SOURCE_FLAVOR}"
           mkdir -p "$curFlavorDir"
-          jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
+          jbrArchiveName="jbrsdk-${version}-${SOURCE_FLAVOR}-${build}.tar.gz"
           echo Downloading "$jbrArchiveName"
           curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
           echo Unpacking "$SOURCE_FLAVOR" JBR
@@ -91,8 +93,8 @@ jobs:
         id: download-jbrs
         shell: bash
         run: |
-          version="${{ steps.detect-jbr.outputs.version }}"
-          build="${{ steps.detect-jbr.outputs.build }}"
+          version="${{ needs.prepare.outputs.JBR_VERSION }}"
+          build="${{ needs.prepare.outputs.JBR_BUILD }}"
           read -r -a targetFlavors <<< ${{ matrix.flavors }}
           echo "sourceFlavor=${targetFlavors[0]}" >> GITHUB_OUTPUT
           for flavor in "${targetFlavors[@]}"; do
@@ -107,7 +109,7 @@ jobs:
       - name: Generate ${{ matrix.flavors }} qodana-jbrs
         shell: bash
         run: |
-          uniqueJdeps="${{ steps.jmods-list.outputs.uniqueJdeps }}"
+          uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST  }}"
           qodanaJbrsDir="${JBRS_DIR}/qodana-jbrs"
           mkdir -p "$qodanaJbrsDir"
           sourceFlavorJlink=$(find "${JBRS_DIR}"/"${{ steps.download-jbrs.outputs.sourceFlavor }}" -name "jlink")
