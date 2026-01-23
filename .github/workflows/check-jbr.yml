@@ -115,7 +115,7 @@ jobs:
           tar -xzf "$archive" -C "$JBRS_DIR"
           ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
 
-      - name: qodana-jbr ${{ matrix.flavor }}
+      - name: Generate ${{ matrix.flavor }} qodana-jbr
         shell: bash
         run: |
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
@@ -123,7 +123,7 @@ jobs:
           mkdir -p "$QODANA_JBRS_DIR"
           flavor="${{ matrix.flavor }}"
           jlinkName=$([[ "$flavor" == windows* ]] && echo "jlink.exe" || echo "jlink")
-          jlink=$(find "${JBRS_DIR}"/"${jbrName} -name "${jlinkName}")
+          jlink=$(find "${JBRS_DIR}"/"${jbrName}" -name "${jlinkName}")
 
           targetModulePath=$(find "${JBRS_DIR}"/"${jbrName}" -name "jmods" -type d)
           qdJbrName=qodana-$jbrName
