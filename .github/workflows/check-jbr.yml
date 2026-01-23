@@ -4,13 +4,17 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  prepare:
+    name: Fetch latest JBR version and generate required jmods list
     runs-on: ubuntu-latest
     env:
-      JARS_DIR: "./jars"
-      JBRS_DIR: "./jbrs"
       SOURCE_FLAVOR: "linux-x64"
-      TARGET_FLAVORS: "linux-x64 windows-aarch64"
+      JARS_DIR: "./jars"
+      JBRS_DIR: "./jbr"
+    outputs:
+      JBR_VERSION: ${{ steps.detect-jbr.outputs.version }}
+      JBR_BUILD: ${{ steps.detect-jbr.outputs.build }}
+      JDEPS_LIST: ${{ steps.jmods-list.outputs.uniqueJdeps }}
     steps:
       - name: Detect latest JBR version
         id: detect-jbr
@@ -20,10 +24,20 @@ jobs:
           tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view --json tagName --jq .tagName)
           version=$(echo "$tagName" | sed -n 's/jbr-release-\(.*\)b.*/\1/p')
           build=$(echo "$tagName" | sed -n 's/.*\(b.*\)/\1/p')
-    
+
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "build=$build" >> $GITHUB_OUTPUT
           echo "Detected latest available JBR version $version, build $build"
+
+      - name: Download latest ${{ env.SOURCE_FLAVOR }} JBR
+        run: |
+          curFlavorDir="${JBRS_DIR}/${SOURCE_FLAVOR}"
+          mkdir -p "$curFlavorDir"
+          jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
+          echo Downloading "$jbrArchiveName"
+          curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+          echo Unpacking "$SOURCE_FLAVOR" JBR
+          tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
 
       - name: Fetch qodana-cli dependencies
         run: |
@@ -31,26 +45,11 @@ jobs:
           mvn -q dependency:copy-dependencies -DoutputDirectory="$JARS_DIR"
           ls -lh $JARS_DIR | tr -s ' ' | cut -d' ' -f9,5
 
-      - name: Download latest JBRs
-        run: |
-          version="${{ steps.detect-jbr.outputs.version }}"
-          build="${{ steps.detect-jbr.outputs.build }}"
-          read -r -a targetFlavors <<< "${TARGET_FLAVORS}"
-          for flavor in "${targetFlavors[@]}"; do
-            curFlavorDir="${JBRS_DIR}/${flavor}"
-            mkdir -p "$curFlavorDir"
-            jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
-            echo Downloading "$jbrArchiveName"
-            curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
-            echo Unpacking "$flavor" JBR
-            tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
-          done
-
       - name: Generate jmods list
         id: jmods-list
         run: |
           sourceFlavorJdeps=$(find "${JBRS_DIR}"/"${SOURCE_FLAVOR}" -name "jdeps" -type f | head -n 1)
-          
+
           merged=''
           for file in "${JARS_DIR}"/*; do
             if [[ -f "$file" ]]; then
@@ -69,14 +68,49 @@ jobs:
 
           uniqueJdeps=$(echo "$merged" | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/^,//;s/,$//')
           echo "uniqueJdeps=$uniqueJdeps" >> $GITHUB_OUTPUT
-          echo -e "\nCommon list of jmods to include in qodana-jbr:\n${uniqueJdeps} \n"
+          echo -e "\nCommon list of jmods to include in qodana-jbrs:\n${uniqueJdeps} \n"
 
-      - name: Generate qodana-jbrs
+  build:
+    name: Generate ${{ matrix.targetFlavors }} qodana-jbrs
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            flavors: "linux-x64 linux-aarch64"
+          - runner: macos-latest
+            flavors: "macos-aarch64 macos-x64"
+          - runner: windows-latest
+            flavors: "windows-x64 windows-aarch64"
+    env:
+      JBRS_DIR: "./jbrs"
+    steps:
+      - name: Download latest JBRs
+        id: download-jbrs
+        shell: bash
+        run: |
+          version="${{ steps.detect-jbr.outputs.version }}"
+          build="${{ steps.detect-jbr.outputs.build }}"
+          read -r -a targetFlavors <<< ${{ matrix.flavors }}
+          echo "sourceFlavor=${targetFlavors[0]}" >> GITHUB_OUTPUT
+          for flavor in "${targetFlavors[@]}"; do
+            curFlavorDir="${JBRS_DIR}/${flavor}"
+            mkdir -p "$curFlavorDir"
+            jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
+            echo Downloading "$jbrArchiveName"
+            curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+            echo Unpacking "$flavor" JBR
+            tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
+          done
+      - name: Generate ${{ matrix.flavors }} qodana-jbrs
+        shell: bash
         run: |
           uniqueJdeps="${{ steps.jmods-list.outputs.uniqueJdeps }}"
           qodanaJbrsDir="${JBRS_DIR}/qodana-jbrs"
           mkdir -p "$qodanaJbrsDir"
-          sourceFlavorJlink=$(find "${JBRS_DIR}"/"${SOURCE_FLAVOR}" -name "jlink")
+          sourceFlavorJlink=$(find "${JBRS_DIR}"/"${{ steps.download-jbrs.outputs.sourceFlavor }}" -name "jlink")
           for directory in "${JBRS_DIR}"/*/*; do
             if [[ -d $directory ]]; then
               targetModulePath=$(find "$directory" -name "jmods" -type d)
