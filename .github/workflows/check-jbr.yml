@@ -148,13 +148,13 @@ jobs:
 
           echo -e "\nArtifact marked for publish:"
           ls -lh "$distDirectory" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
-          echo "qdJbrName=$qdJbrName" >> $GITHUB_OUTPUT
+          echo "archiveName=${qdJbrName}.tar.gz" >> $GITHUB_OUTPUT
           echo "archivePath=$archivePath" >> $GITHUB_OUTPUT
 
       - name: Upload ${{ matrix.flavor }} qodana-jbr
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.generate-qodana-jbr.outputs.qdJbrName }}
+          name: ${{ steps.generate-qodana-jbr.outputs.archiveName }}
           path: ${{ steps.generate-qodana-jbr.outputs.archivePath }}
           if-no-files-found: error
 
@@ -171,6 +171,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ${{ env.DIST_DIRECTORY }}
+
+      - name: Inspect collected files
+        shell: bash
+        run: |
+          find $DIST_DIRECTORY -type f -maxdepth 3 -print
+          find $DIST_DIRECTORY -type f -name "*.tar.gz" -maxdepth 3 | wc -l
 
       - name: List assets marked for release
         shell: bash
