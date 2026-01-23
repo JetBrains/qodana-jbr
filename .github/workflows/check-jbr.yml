@@ -100,34 +100,37 @@ jobs:
         id: download-jbr
         shell: bash
         run: |
+          mkdir -p "$JBRS_DIR"
           version="${{ needs.prepare.outputs.JBR_VERSION }}"
           build="${{ needs.prepare.outputs.JBR_BUILD }}"
           flavor="${{ matrix.flavor }}"
           jbrName="jbrsdk-$version-$flavor-$build"
-          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
+
           echo Downloading "$jbrName"
-          mkdir -p "$JBRS_DIR"
-          
-          archive="$JBRS_DIR/${jbrName}.tar.gz"
-          curl -L -# -o "$archive" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+          jbrArchivePath="$JBRS_DIR/${jbrName}.tar.gz"
+          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
       
           echo "Unpacking $flavor JBR"
-          tar -xzf "$archive" -C "$JBRS_DIR"
+          tar -xzf "$jbrArchivePath" -C "$JBRS_DIR"
+          echo -e "\nDownloaded $flavor JBR:"
           ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          
+          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
 
       - name: Generate ${{ matrix.flavor }} qodana-jbr
         shell: bash
         run: |
+          mkdir -p "$QODANA_JBRS_DIR"
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
           jbrName="${{ steps.download-jbr.outputs.jbrName }}"
-          mkdir -p "$QODANA_JBRS_DIR"
           flavor="${{ matrix.flavor }}"
+          
           jlinkName=$([[ "$flavor" == windows* ]] && echo "jlink.exe" || echo "jlink")
           jlink=$(find "${JBRS_DIR}"/"${jbrName}" -name "${jlinkName}")
-
           targetModulePath=$(find "${JBRS_DIR}"/"${jbrName}" -name "jmods" -type d)
           qdJbrName=qodana-$jbrName
-          echo Generating "$qdJbrName"
+          
+          echo -e "\nRunning $jlink"
           "$jlink" \
           --module-path "$targetModulePath" \
           --compress=zip-6 \
@@ -139,7 +142,7 @@ jobs:
 
           archive_name="${QODANA_JBRS_DIR}/${qdJbrName}.tar.gz"
           tar -czf "$archive_name" -C "$QODANA_JBRS_DIR" "$qdJbrName"
-          echo -e "Created qodana-jbr archive: ${archive_name}\n"
+          echo -e "Generated qodana-jbr: ${qdJbrName}\n"
 
-          echo Artifact marked for publish:
+          echo -e "\nArtifact marked for publish:"
           ls -lh "$QODANA_JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
