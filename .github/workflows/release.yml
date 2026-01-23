@@ -1,4 +1,4 @@
-name: Check JBR Version
+name: Release qodana-jbr
 
 on:
   workflow_dispatch:
