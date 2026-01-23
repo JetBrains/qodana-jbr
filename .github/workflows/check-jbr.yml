@@ -111,7 +111,7 @@ jobs:
           tar -xzf "$"${JBRS_DIR}"/*.tar.gz -C "$JBRS_DIR"
           ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
 
-      - name: Generate ${{ matrix.flavor }} qodana-jbr
+      - name: qodana-jbr ${{ matrix.flavor }}
         shell: bash
         run: |
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
