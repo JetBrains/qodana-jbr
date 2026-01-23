@@ -5,7 +5,7 @@ on:
 
 jobs:
   prepare:
-    name: Fetch latest JBR version and generate required jmods list
+    name: Prepare data
     runs-on: ubuntu-latest
     env:
       SOURCE_FLAVOR: "linux-x64"
@@ -73,7 +73,7 @@ jobs:
           echo -e "\nCommon list of jmods to include in qodana-jbrs:\n${uniqueJdeps} \n"
 
   build:
-    name: Generate ${{ matrix.flavor }} qodana-jbr
+    name: ${{ matrix.flavor }} qodana-jbr
     needs: prepare
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -86,7 +86,7 @@ jobs:
             flavor: "linux-aarch64"
           - runner: macos-latest
             flavor: "osx-aarch64"
-          - runner: macos-13
+          - runner: macos-15-intel
             flavor: "osx-x64"
           - runner: windows-latest
             flavor: "windows-x64"
@@ -103,42 +103,39 @@ jobs:
           version="${{ needs.prepare.outputs.JBR_VERSION }}"
           build="${{ needs.prepare.outputs.JBR_BUILD }}"
           flavor="${{ matrix.flavor }}"
-          curFlavorDir="${JBRS_DIR}/${flavor}"
-          mkdir -p "$curFlavorDir"
-          jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
-          echo Downloading "$jbrArchiveName"
-          curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+          jbrName="jbrsdk-$version-$flavor-$build"
+          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
+          echo Downloading "$jbrName"
+          curl -L -# -O --output-dir "$JBRS_DIR" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
           echo Unpacking "$flavor" JBR
-          tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
+          tar -xzf "$"${JBRS_DIR}"/*.tar.gz -C "$JBRS_DIR"
+          ls -lh "$JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
 
       - name: Generate ${{ matrix.flavor }} qodana-jbr
         shell: bash
         run: |
-          uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST  }}"
+          uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
+          jbrName="${{ steps.download-jbr.outputs.jbrName }}"
           mkdir -p "$QODANA_JBRS_DIR"
           flavor="${{ matrix.flavor }}"
           jlinkName=$([[ "$flavor" == windows* ]] && echo "jlink.exe" || echo "jlink")
-          flavorJlink=$(find "${JBRS_DIR}"/"${flavor}" -name "${jlinkName}")
-          for directory in "${JBRS_DIR}"/*/*; do
-            if [[ -d $directory ]]; then
-              pwd
-              echo Working directory: "$directory"
-              targetModulePath=$(find "$directory" -name "jmods" -type d)
-              qdJbrName=qodana-$(basename "$directory")
-              echo Generating "$qdJbrName"
-              "$flavorJlink" \
-              --module-path "$targetModulePath" \
-              --compress=zip-6 \
-              --add-modules "$uniqueJdeps" \
-              --no-header-files \
-              --no-man-pages \
-              --strip-debug \
-              --output "${QODANA_JBRS_DIR}/${qdJbrName}"
+          jlink=$(find "${JBRS_DIR}"/"${jbrName} -name "${jlinkName}")
 
-              archive_name="${QODANA_JBRS_DIR}/${qdJbrName}.tar.gz"
-              tar -czf "$archive_name" -C "$QODANA_JBRS_DIR" "$qdJbrName"
-              echo -e "Created qodana-jbr archive: ${archive_name}\n"
-            fi
-          done
+          targetModulePath=$(find "${JBRS_DIR}"/"${jbrName}" -name "jmods" -type d)
+          qdJbrName=qodana-$jbrName
+          echo Generating "$qdJbrName"
+          "$jlink" \
+          --module-path "$targetModulePath" \
+          --compress=zip-6 \
+          --add-modules "$uniqueJdeps" \
+          --no-header-files \
+          --no-man-pages \
+          --strip-debug \
+          --output "${QODANA_JBRS_DIR}/${qdJbrName}"
+
+          archive_name="${QODANA_JBRS_DIR}/${qdJbrName}.tar.gz"
+          tar -czf "$archive_name" -C "$QODANA_JBRS_DIR" "$qdJbrName"
+          echo -e "Created qodana-jbr archive: ${archive_name}\n"
+
           echo Artifact marked for publish:
-          ls -lh "$QODANA_JBRS_DIR"
+          ls -lh "$QODANA_JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
