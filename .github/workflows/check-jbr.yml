@@ -90,13 +90,13 @@ jobs:
             flavor: "osx-x64"
           - runner: windows-latest
             flavor: "windows-x64"
-          - runners: windows-11-arm
+          - runner: windows-11-arm
             flavor: "windows-aarch64"
     env:
       JBRS_DIR: "./jbrs"
       QODANA_JBRS_DIR: "./qodana-jbrs"
     steps:
-      - name: Download latest JBR
+      - name: Download latest ${{ matrix.flavor }} JBR
         id: download-jbr
         shell: bash
         run: |
@@ -110,7 +110,8 @@ jobs:
           curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
           echo Unpacking "$flavor" JBR
           tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
-      - name: Generate ${{ matrix.flavors }} qodana-jbrs
+
+      - name: Generate ${{ matrix.flavor }} qodana-jbr
         shell: bash
         run: |
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST  }}"
