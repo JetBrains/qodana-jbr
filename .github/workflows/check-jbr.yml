@@ -10,7 +10,6 @@ jobs:
     env:
       SOURCE_FLAVOR: "linux-x64"
       JARS_DIR: "./jars"
-      JBRS_DIR: "./jbr"
     outputs:
       JBR_VERSION: ${{ steps.detect-jbr.outputs.version }}
       JBR_BUILD: ${{ steps.detect-jbr.outputs.build }}
@@ -25,9 +24,9 @@ jobs:
           version=$(echo "$tagName" | sed -n 's/jbr-release-\(.*\)b.*/\1/p')
           build=$(echo "$tagName" | sed -n 's/.*\(b.*\)/\1/p')
 
+          echo "Detected latest available JBR version $version, build $build"
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "build=$build" >> $GITHUB_OUTPUT
-          echo "Detected latest available JBR version $version, build $build"
 
       - name: Download latest ${{ env.SOURCE_FLAVOR }} JBR
         run: |
@@ -35,11 +34,16 @@ jobs:
           build="${{ steps.detect-jbr.outputs.build }}"
           curFlavorDir="${SOURCE_FLAVOR}"
           mkdir -p "$curFlavorDir"
-          jbrArchiveName="jbrsdk-${version}-${SOURCE_FLAVOR}-${build}.tar.gz"
-          echo Downloading "$jbrArchiveName"
-          curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+          jbrName="jbrsdk-$version-$flavor-$build"
+          
+          echo Downloading "$jbrName"
+          jbrArchivePath="${jbrName}.tar.gz"
+          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+          
           echo Unpacking "$SOURCE_FLAVOR" JBR
-          tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
+          tar -xzf "$jbrArchivePath"
+          echo -e "\nDownloaded $SOURCE_FLAVOR JBR:"
+          ls -lh | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
 
       - name: Fetch qodana-cli dependencies
         run: |
@@ -69,8 +73,8 @@ jobs:
           done
 
           uniqueJdeps=$(echo "$merged" | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/^,//;s/,$//')
-          echo "uniqueJdeps=$uniqueJdeps" >> $GITHUB_OUTPUT
           echo -e "\nCommon list of jmods to include in qodana-jbrs:\n${uniqueJdeps} \n"
+          echo "uniqueJdeps=$uniqueJdeps" >> $GITHUB_OUTPUT
 
   build:
     name: ${{ matrix.flavor }} qodana-jbr
@@ -92,9 +96,6 @@ jobs:
             flavor: "windows-x64"
           - runner: windows-11-arm
             flavor: "windows-aarch64"
-    env:
-      JBRS_DIR: "./jbrs"
-      QODANA_JBRS_DIR: "./qodana-jbrs"
     steps:
       - name: Download latest ${{ matrix.flavor }} JBR
         id: download-jbr
@@ -119,7 +120,8 @@ jobs:
       - name: Generate ${{ matrix.flavor }} qodana-jbr
         shell: bash
         run: |
-          mkdir -p "$QODANA_JBRS_DIR"
+          distDirectory="./dist"
+          mkdir -p "$distDirectory"
           uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
           jbrName="${{ steps.download-jbr.outputs.jbrName }}"
           flavor="${{ matrix.flavor }}"
@@ -137,11 +139,11 @@ jobs:
           --no-header-files \
           --no-man-pages \
           --strip-debug \
-          --output "${QODANA_JBRS_DIR}/${qdJbrName}"
+          --output "${distDirectory}/${qdJbrName}"
 
-          archive_name="${QODANA_JBRS_DIR}/${qdJbrName}.tar.gz"
-          tar -czf "$archive_name" -C "$QODANA_JBRS_DIR" "$qdJbrName"
+          archive_name="${distDirectory}/${qdJbrName}.tar.gz"
+          tar -czf "$archive_name" -C "$distDirectory" "$qdJbrName"
           echo -e "Generated qodana-jbr: ${qdJbrName}\n"
 
           echo -e "\nArtifact marked for publish:"
-          ls -lh "$QODANA_JBRS_DIR" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          ls -lh "$distDirectory" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
