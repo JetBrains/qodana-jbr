@@ -197,7 +197,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="test-${{ github.run_id }}"
-          assets=($DIST_DIRECTORY/*.tar.gz)
+          assets=($DIST_DIRECTORY/**/*.tar.gz)
 
           if (( ${#assets[@]} == 0 )); then
             echo "No .tar.gz assets found to upload."
@@ -208,12 +208,12 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --clobber
 
+      - name: Cleanup test release
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="test-${{ github.run_id }}"
+          gh release delete "$tag" --yes --cleanup-tag || true
       # Optional: uncomment to auto-cleanup the test release at the end
-      # - name: Cleanup test release
-      #   if: always()
-      #   shell: bash
-      #   env:
-      #     GH_TOKEN: ${{ github.token }}
-      #   run: |
-      #     tag="test-${{ github.run_id }}"
-      #     gh release delete "$tag" --yes --cleanup-tag || true
