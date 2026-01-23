@@ -73,7 +73,7 @@ jobs:
           echo -e "\nCommon list of jmods to include in qodana-jbrs:\n${uniqueJdeps} \n"
 
   build:
-    name: Generate ${{ matrix.targetFlavors }} qodana-jbrs
+    name: Generate ${{ matrix.flavors }} qodana-jbrs
     needs: prepare
     runs-on: ${{ matrix.runner }}
     strategy:
