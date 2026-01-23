@@ -77,7 +77,7 @@ jobs:
     needs: prepare
     runs-on: ${{ matrix.runner }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
@@ -103,6 +103,7 @@ jobs:
             jbrArchiveName="jbrsdk-$version-$flavor-$build.tar.gz"
             echo Downloading "$jbrArchiveName"
             curl -L -# -O --output-dir "$curFlavorDir" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrArchiveName}"
+            ls -lh "$curFlavorDir"
             echo Unpacking "$flavor" JBR
             tar -xzf "${curFlavorDir}"/*.tar.gz -C "$curFlavorDir"
           done
