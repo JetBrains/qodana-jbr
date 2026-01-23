@@ -1,0 +1,221 @@
+name: Check JBR Version
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    name: Prepare data
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_FLAVOR: "linux-x64"
+      JARS_DIR: "./jars"
+    outputs:
+      JBR_VERSION: ${{ steps.detect-jbr.outputs.version }}
+      JBR_BUILD: ${{ steps.detect-jbr.outputs.build }}
+      JDEPS_LIST: ${{ steps.jmods-list.outputs.uniqueJdeps }}
+    steps:
+      - name: Detect latest JBR version
+        id: detect-jbr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view --json tagName --jq .tagName)
+          version=$(echo "$tagName" | sed -n 's/jbr-release-\(.*\)b.*/\1/p')
+          build=$(echo "$tagName" | sed -n 's/.*\(b.*\)/\1/p')
+
+          echo "Detected latest available JBR version $version, build $build"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "build=$build" >> $GITHUB_OUTPUT
+
+      - name: Download latest ${{ env.SOURCE_FLAVOR }} JBR
+        id: download-jbr
+        run: |
+          version="${{ steps.detect-jbr.outputs.version }}"
+          build="${{ steps.detect-jbr.outputs.build }}"
+          jbrName="jbrsdk-$version-$SOURCE_FLAVOR-$build"
+          
+          echo Downloading "$jbrName"
+          jbrArchivePath="${jbrName}.tar.gz"
+          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+          
+          echo Unpacking "$SOURCE_FLAVOR" JBR
+          tar -xzf "$jbrArchivePath"
+          echo -e "\nDownloaded $SOURCE_FLAVOR JBR:"
+          ls -lh | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
+
+      - name: Fetch qodana-cli dependencies
+        run: |
+          curl -L -# -O https://raw.githubusercontent.com/JetBrains/qodana-cli/main/internal/tooling/pom.xml 
+          mvn -q dependency:copy-dependencies -DoutputDirectory="$JARS_DIR"
+          ls -lh $JARS_DIR | tr -s ' ' | cut -d' ' -f9,5
+
+      - name: Generate jmods list
+        id: jmods-list
+        run: |
+          jdeps=$(find "${{ steps.download-jbr.outputs.jbrName }}" -name "jdeps" -type f | head -n 1)
+
+          merged=''
+          for file in "${JARS_DIR}"/*; do
+            if [[ -f "$file" ]]; then
+              curJdeps=$("$jdeps" --list-deps --ignore-missing-deps "$file")
+
+              if [[ "$curJdeps" == Error:* ]]; then
+                echo Error detected in jdeps output for "$file":
+                echo "$curJdeps"
+                exit 1
+              fi
+              echo -e "\nDetected jmods for $(basename "$file"):"
+              echo "$curJdeps"
+              merged="$merged $curJdeps"
+            fi
+          done
+
+          uniqueJdeps=$(echo "$merged" | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/^,//;s/,$//')
+          echo -e "\nCommon list of jmods to include in qodana-jbrs:\n${uniqueJdeps} \n"
+          echo "uniqueJdeps=$uniqueJdeps" >> $GITHUB_OUTPUT
+
+  build:
+    name: ${{ matrix.flavor }} qodana-jbr
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            flavor: "linux-x64"
+          - runner: ubuntu-24.04-arm
+            flavor: "linux-aarch64"
+          - runner: macos-latest
+            flavor: "osx-aarch64"
+          - runner: macos-15-intel
+            flavor: "osx-x64"
+          - runner: windows-latest
+            flavor: "windows-x64"
+          - runner: windows-11-arm
+            flavor: "windows-aarch64"
+    steps:
+      - name: Download latest ${{ matrix.flavor }} JBR
+        id: download-jbr
+        shell: bash
+        run: |
+          version="${{ needs.prepare.outputs.JBR_VERSION }}"
+          build="${{ needs.prepare.outputs.JBR_BUILD }}"
+          flavor="${{ matrix.flavor }}"
+          jbrName="jbrsdk-$version-$flavor-$build"
+
+          echo Downloading "$jbrName"
+          jbrArchivePath="${jbrName}.tar.gz"
+          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+      
+          echo "Unpacking $flavor JBR"
+          tar -xzf "$jbrArchivePath"
+          echo -e "\nDownloaded $flavor JBR:"
+          ls -lh | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          
+          echo "jbrName=$jbrName" >> $GITHUB_OUTPUT
+
+      - name: Generate ${{ matrix.flavor }} qodana-jbr
+        id: generate-qodana-jbr
+        shell: bash
+        run: |
+          distDirectory="./dist"
+          mkdir -p "$distDirectory"
+          uniqueJdeps="${{ needs.prepare.outputs.JDEPS_LIST }}"
+          jbrName="${{ steps.download-jbr.outputs.jbrName }}"
+          flavor="${{ matrix.flavor }}"
+          
+          jlinkName=$([[ "$flavor" == windows* ]] && echo "jlink.exe" || echo "jlink")
+          jlink=$(find "${jbrName}" -name "${jlinkName}")
+          targetModulePath=$(find "${jbrName}" -name "jmods" -type d)
+          qdJbrName=qodana-$jbrName
+          
+          echo -e "\nRunning $jlink"
+          "$jlink" \
+          --module-path "$targetModulePath" \
+          --compress=zip-6 \
+          --add-modules "$uniqueJdeps" \
+          --no-header-files \
+          --no-man-pages \
+          --strip-debug \
+          --output "${distDirectory}/${qdJbrName}"
+
+          archivePath="${distDirectory}/${qdJbrName}.tar.gz"
+          tar -czf "$archivePath" -C "$distDirectory" "$qdJbrName"
+          echo -e "Generated qodana-jbr: ${qdJbrName}\n"
+
+          echo -e "\nArtifact marked for publish:"
+          ls -lh "$distDirectory" | grep tar.gz | tr -s ' ' | cut -d' ' -f9,5
+          echo "qdJbrName=${qdJbrName}" >> $GITHUB_OUTPUT
+          echo "archivePath=$archivePath" >> $GITHUB_OUTPUT
+
+      - name: Upload ${{ matrix.flavor }} qodana-jbr
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.generate-qodana-jbr.outputs.qdJbrName }}
+          path: ${{ steps.generate-qodana-jbr.outputs.archivePath }}
+          if-no-files-found: error
+
+  publish-test-release:
+    name: Publish test release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      DIST_DIRECTORY: "./dist"
+    steps:
+      - name: Download all matrix artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.DIST_DIRECTORY }}
+
+      - name: List all artifacts
+        shell: bash
+        run: |
+          find $DIST_DIRECTORY -type f -maxdepth 3
+
+      - name: Create test pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="test-${{ github.run_id }}"
+          title="Test release ${tag}"
+          notes="Temporary test release from run ${{ github.run_id }}."
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --notes "$notes" \
+            --prerelease
+
+      - name: Upload all assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="test-${{ github.run_id }}"
+          assets=($DIST_DIRECTORY/**/*.tar.gz)
+
+          if (( ${#assets[@]} == 0 )); then
+            echo "No .tar.gz assets found to upload."
+            exit 1
+          fi
+
+          gh release upload "$tag" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+#      - name: Cleanup test release
+#        if: always()
+#        shell: bash
+#        env:
+#          GH_TOKEN: ${{ github.token }}
+#        run: |
+#          tag="test-${{ github.run_id }}"
+#          gh release delete "$tag" \
+#          --repo "$GITHUB_REPOSITORY" \
+#          --yes \
+#          --cleanup-tag || true
