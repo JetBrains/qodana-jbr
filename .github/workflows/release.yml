@@ -158,7 +158,7 @@ jobs:
           path: ${{ steps.generate-qodana-jbr.outputs.archivePath }}
           if-no-files-found: error
 
-  publish-test-release:
+  publish-release:
     name: Publish test release
     needs: build
     runs-on: ubuntu-latest
@@ -177,19 +177,21 @@ jobs:
         run: |
           find $DIST_DIRECTORY -type f -maxdepth 3
 
-      - name: Create test pre-release
+      - name: Create release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="test-${{ github.run_id }}"
-          title="Test release ${tag}"
-          notes="Temporary test release from run ${{ github.run_id }}."
+          version="${{ needs.prepare.outputs.JBR_VERSION }}"
+          build="${{ needs.prepare.outputs.JBR_BUILD }}"
+          workflowRunNumber="${{ github.run_number }}"
+          tag="v$version$build.$workflowRunNumber"
+          title="Qodana JBR release ${tag}"
+          notes="Qodana JBR release based on JetBrains Runtime $version build $build"
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$title" \
-            --notes "$notes" \
-            --prerelease
+            --notes "$notes"
 
       - name: Upload all assets
         shell: bash
@@ -207,15 +209,3 @@ jobs:
           gh release upload "$tag" "${assets[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
-
-#      - name: Cleanup test release
-#        if: always()
-#        shell: bash
-#        env:
-#          GH_TOKEN: ${{ github.token }}
-#        run: |
-#          tag="test-${{ github.run_id }}"
-#          gh release delete "$tag" \
-#          --repo "$GITHUB_REPOSITORY" \
-#          --yes \
-#          --cleanup-tag || true
