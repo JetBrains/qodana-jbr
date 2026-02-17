@@ -1,4 +1,4 @@
-name: Release qodana-jbr
+name: Release Qodana JBR
 
 on:
   workflow_dispatch:
@@ -195,6 +195,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          version='${{ needs.prepare.outputs.JBR_VERSION }}'
+          build='${{ needs.prepare.outputs.JBR_BUILD }}'
           tag='${{ steps.tag.outputs.tag }}'
           title="${tag}"
           notes="Qodana JBR release based on JetBrains Runtime $version build $build"
