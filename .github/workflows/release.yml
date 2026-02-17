@@ -160,7 +160,7 @@ jobs:
 
   publish-release:
     name: Publish release
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -177,16 +177,26 @@ jobs:
         run: |
           find $DIST_DIRECTORY -type f -maxdepth 3
 
+      - name: Generate tag
+        id: tag
+        shell: bash
+        run: |
+          version='${{ needs.prepare.outputs.JBR_VERSION }}'
+          build='${{ needs.prepare.outputs.JBR_BUILD }}'
+          workflowRunNumber='${{ github.run_number }}'
+          
+          tag="v${version}${build}.${workflowRunNumber}"
+          
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Generated tag for Qodana JBR release: $tag"
+
       - name: Create release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${{ needs.prepare.outputs.JBR_VERSION }}"
-          build="${{ needs.prepare.outputs.JBR_BUILD }}"
-          workflowRunNumber="${{ github.run_number }}"
-          tag="v$version$build.$workflowRunNumber"
-          title="Qodana JBR release ${tag}"
+          tag='${{ steps.tag.outputs.tag }}'
+          title="${tag}"
           notes="Qodana JBR release based on JetBrains Runtime $version build $build"
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
@@ -198,10 +208,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${{ needs.prepare.outputs.JBR_VERSION }}"
-          build="${{ needs.prepare.outputs.JBR_BUILD }}"
-          workflowRunNumber="${{ github.run_number }}"
-          tag="v$version$build.$workflowRunNumber"
+          tag='${{ steps.tag.outputs.tag }}'
           assets=($DIST_DIRECTORY/**/*.tar.gz)
 
           if (( ${#assets[@]} == 0 )); then
