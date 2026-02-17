@@ -159,7 +159,7 @@ jobs:
           if-no-files-found: error
 
   publish-release:
-    name: Publish test release
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -198,7 +198,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="test-${{ github.run_id }}"
+          version="${{ needs.prepare.outputs.JBR_VERSION }}"
+          build="${{ needs.prepare.outputs.JBR_BUILD }}"
+          workflowRunNumber="${{ github.run_number }}"
+          tag="v$version$build.$workflowRunNumber"
           assets=($DIST_DIRECTORY/**/*.tar.gz)
 
           if (( ${#assets[@]} == 0 )); then
