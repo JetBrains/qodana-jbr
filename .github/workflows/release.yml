@@ -73,9 +73,8 @@ jobs:
           merged=''
           for file in "${JARS_DIR}"/*; do
             if [[ -f "$file" ]]; then
-              curJdeps=$("$jdeps" --list-deps --ignore-missing-deps "$file")
-
-              if [[ "$curJdeps" == Error:* ]]; then
+              # Multi-release jars such as kotlin-stdlib need --multi-release; their base classes are what jlink needs
+              if ! curJdeps=$("$jdeps" --multi-release base --list-deps --ignore-missing-deps "$file" 2>&1); then
                 echo Error detected in jdeps output for "$file":
                 echo "$curJdeps"
                 exit 1
