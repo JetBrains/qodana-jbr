@@ -2,6 +2,11 @@ name: Release Qodana JBR
 
 on:
   workflow_dispatch:
+    inputs:
+      jbr-tag:
+        description: "JetBrains Runtime release tag to build from, e.g. jbr-release-25.0.4.1b635.79. Leave empty to use the latest release."
+        required: false
+        default: ""
 
 jobs:
   prepare:
@@ -15,16 +20,25 @@ jobs:
       JBR_BUILD: ${{ steps.detect-jbr.outputs.build }}
       JDEPS_LIST: ${{ steps.jmods-list.outputs.uniqueJdeps }}
     steps:
-      - name: Detect latest JBR version
+      - name: Detect JBR version
         id: detect-jbr
         env:
           GH_TOKEN: ${{ github.token }}
+          JBR_TAG: ${{ inputs.jbr-tag }}
         run: |
-          tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view --json tagName --jq .tagName)
+          if [[ -n "$JBR_TAG" ]]; then
+            if [[ ! "$JBR_TAG" =~ ^jbr-release-[0-9.]+b[0-9.]+$ ]]; then
+              echo "Invalid jbr-tag '$JBR_TAG', expected a tag like jbr-release-25.0.4.1b635.79"
+              exit 1
+            fi
+            tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view "$JBR_TAG" --json tagName --jq .tagName)
+          else
+            tagName=$(gh -R https://github.com/JetBrains/JetBrainsRuntime release view --json tagName --jq .tagName)
+          fi
           version=$(echo "$tagName" | sed -n 's/jbr-release-\(.*\)b.*/\1/p')
           build=$(echo "$tagName" | sed -n 's/.*\(b.*\)/\1/p')
 
-          echo "Detected latest available JBR version $version, build $build"
+          echo "Detected JBR version $version, build $build"
           echo "version=$version" >> $GITHUB_OUTPUT
           echo "build=$build" >> $GITHUB_OUTPUT
 
@@ -151,8 +165,33 @@ jobs:
           echo "qdJbrName=${qdJbrName}" >> $GITHUB_OUTPUT
           echo "archivePath=$archivePath" >> $GITHUB_OUTPUT
 
+      # emSign ECC Root CA - G3 and AAA Certificate Services are distrusted and must not be shipped (QD-16607)
+      - name: Check ${{ matrix.flavor }} qodana-jbr trust store
+        shell: bash
+        run: |
+          jbrName="${{ steps.download-jbr.outputs.jbrName }}"
+          cacerts="./dist/${{ steps.generate-qodana-jbr.outputs.qdJbrName }}/lib/security/cacerts"
+          keytoolName=$([[ "${{ matrix.flavor }}" == windows* ]] && echo "keytool.exe" || echo "keytool")
+          keytool=$(find "${jbrName}" -name "${keytoolName}" -type f | head -n 1)
+
+          if ! certs=$("$keytool" -list -v -keystore "$cacerts" -storepass changeit 2>&1 | tr -d '\r'); then
+            echo "Cannot read $cacerts: $certs"
+            exit 1
+          fi
+          count=$(grep -c 'SHA256:' <<< "$certs" || true)
+          if (( count == 0 )); then
+            echo "No certificates found in $cacerts"
+            exit 1
+          fi
+          distrusted='SHA256: (86:A1:EC:BA:08:9C:4A:8D:3B:BE:27:34:C6:12:BA:34:1D:81:3E:04:3C:F9:E8:A8:62:CD:5C:57:A3:6B:BE:6B|D7:A7:A0:FB:5D:7E:27:31:D7:71:E9:48:4E:BC:DE:F7:1D:5F:0C:3E:0A:29:48:78:2B:C8:3E:E0:EA:69:9E:F4)$'
+          if grep -qE "$distrusted" <<< "$certs"; then
+            echo "$cacerts trusts a distrusted root CA, use a JBR build without it"
+            exit 1
+          fi
+          echo "$cacerts: $count certificates, no distrusted root CA"
+
       - name: Upload ${{ matrix.flavor }} qodana-jbr
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.generate-qodana-jbr.outputs.qdJbrName }}
           path: ${{ steps.generate-qodana-jbr.outputs.archivePath }}
@@ -168,7 +207,7 @@ jobs:
       DIST_DIRECTORY: "./dist"
     steps:
       - name: Download all matrix artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ${{ env.DIST_DIRECTORY }}
 
