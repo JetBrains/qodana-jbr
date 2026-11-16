@@ -51,7 +51,7 @@ jobs:
           
           echo Downloading "$jbrName"
           jbrArchivePath="${jbrName}.tar.gz"
-          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+          curl -fL -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
           
           echo Unpacking "$SOURCE_FLAVOR" JBR
           tar -xzf "$jbrArchivePath"
@@ -121,7 +121,7 @@ jobs:
 
           echo Downloading "$jbrName"
           jbrArchivePath="${jbrName}.tar.gz"
-          curl -L -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
+          curl -fL -# -o "$jbrArchivePath" "https://cache-redirector.jetbrains.com/intellij-jbr/${jbrName}.tar.gz"
       
           echo "Unpacking $flavor JBR"
           tar -xzf "$jbrArchivePath"
