@@ -61,7 +61,7 @@ jobs:
 
       - name: Fetch qodana-cli dependencies
         run: |
-          curl -L -# -O https://raw.githubusercontent.com/JetBrains/qodana-cli/main/internal/tooling/pom.xml 
+          curl -fsSL -O https://raw.githubusercontent.com/JetBrains/qodana-cli/main/internal/tooling/scripts/pom.xml
           mvn -q dependency:copy-dependencies -DoutputDirectory="$JARS_DIR"
           ls -lh $JARS_DIR | tr -s ' ' | cut -d' ' -f9,5
 
